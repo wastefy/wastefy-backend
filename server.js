@@ -8,14 +8,15 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Routes
-app.use('/api/auth', authRoutes);
-
 // Health check
 app.get('/', (req, res) => {
     res.json({ message: 'Backend siap digunakan' });
 });
 
+// Routes
+app.use('/api/auth', authRoutes);
+
+// Global error handler
 app.use((err, req, res, next) => {
     console.error(err.stack);
     res.status(500).send('Ada masalah di server!');
