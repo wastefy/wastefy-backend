@@ -22,4 +22,16 @@ const validateForgotPassword = [
     validate,
 ];
 
-module.exports = { validateRegister, validateForgotPassword };
+const validateVerifyOtp = [
+    body('email').isEmail().withMessage('Format email tidak valid'),
+    body('otp').isLength({ min: 4, max: 4 }).withMessage('OTP harus 4 digit'),
+    validate,
+];
+
+const validateResetPassword = [
+    body('email').isEmail().withMessage('Format email tidak valid'),
+    body('newPassword').isLength({ min: 6 }).withMessage('Password minimal 6 karakter'),
+    validate,
+];
+
+module.exports = { validateRegister, validateForgotPassword, validateVerifyOtp, validateResetPassword };

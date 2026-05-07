@@ -1,6 +1,7 @@
 const userModel = require('../models/userModel');
 const { admin, auth } = require('../config/firebase');
 const { sendEmail } = require('../config/mailer');
+const otpModel = require('../models/otpModel');
 
 const authController = {
     // Register Manual
@@ -87,6 +88,12 @@ const authController = {
                 user = await userModel.getUserById(uid);
             }
 
+            // Sinkronisasi status verifikasi dari Firebase Auth ke Firestore
+            if (email_verified && user && !user.isVerified) {
+                await userModel.updateUser(uid, { isVerified: true });
+                user.isVerified = true; // Update variabel lokal agar respons Postman/HTML langsung berubah
+            }
+
             res.json({
                 message: 'Login berhasil',
                 user,
@@ -98,7 +105,7 @@ const authController = {
         }
     },
 
-    // Forgot Password
+    // Forgot Password - Kirim OTP 
     forgotPassword: async (req, res) => {
         try {
             const { email } = req.body;
@@ -109,27 +116,89 @@ const authController = {
                 return res.status(404).json({ message: 'Email tidak ditemukan' });
             }
 
-            // Generate link reset password
-            const resetLink = await auth.generatePasswordResetLink(email);
+            // Generate OTP 4 digit
+            const otp = Math.floor(1000 + Math.random() * 9000).toString();
+
+            // Simpan OTP ke Firestore
+            await otpModel.saveOtp(email, otp);
+
+            // Kirim OTP ke email
             await sendEmail(
                 email,
-                'Reset Password Wastefy',
+                'Kode OTP Reset Password Wastefy',
                 `
+                    <div style="font-family: Arial, sans-serif; max-width: 500px; margin: auto;">
                         <h2>Reset Password</h2>
-                        <p>Kamu meminta reset password untuk akun Wastefy kamu.</p>
-                        <p>Klik link berikut untuk membuat password baru:</p>
-                        <a href="${resetLink}">Reset Password</a>
-                        <p>Jika kamu tidak meminta ini, abaikan email ini.</p>
-                        <p>Link ini akan kadaluarsa dalam 1 jam.</p>
-                    `
+                        <p>Gunakan kode OTP berikut untuk reset password kamu:</p>
+                        <div style="font-size: 36px; font-weight: bold; letter-spacing: 10px; 
+                                text-align: center; padding: 20px; background: #f5f5f5; 
+                                border-radius: 8px; margin: 20px 0;">
+                        ${otp}
+                    </div>
+                    <p style="color: gray; font-size: 12px;">
+                        Kode ini akan kadaluarsa dalam 5 menit.<br/>
+                        Jika kamu tidak meminta ini, abaikan email ini.
+                    </p>
+                </div>
+                `
             );
 
-            res.json({ message: 'Link reset password telah dikirim ke email kamu' });
+            res.json({ message: 'Kode OTP telah dikirim ke email kamu' });
         } catch (error) {
             res.status(500).json({
-                message: 'Gagal mengirim link reset password',
+                message: 'Gagal mengirim OTP',
                 error: error.message
             });
+        }
+    },
+
+    // Verify OTP
+    verifyOtp: async (req, res) => {
+        try {
+            const { email, otp } = req.body;
+
+            // Ambil OTP dari Firestore
+            const otpData = await otpModel.getOtp(email);
+            if (!otpData) {
+                return res.status(400).json({ message: 'OTP tidak ditemukan, silahkan request ulang' });
+            }
+
+            // Cek apakah OTP sudah expired
+            if (new Date() > new Date(otpData.expiredAt)) {
+                await otpModel.deleteOtp(email); // Hapus OTP yang sudah expired
+                return res.status(400).json({ message: 'OTP sudah kadaluarsa, silahkan request ulang' });
+            }
+
+            // Cek apakah OTP cocok
+            if (otp !== otpData.otp) {
+                return res.status(400).json({ message: 'OTP tidak valid' });
+            }
+
+            // OTP valid, hapus OTP dari Firestore
+            await otpModel.deleteOtp(email);
+            res.json({ message: 'OTP valid, silakan buat password baru' });
+        } catch (error) {
+            res.status(500).json({ message: 'Gagal verifikasi OTP', error: error.message });
+        }
+    },
+
+    // Reset Password setelah OTP terverifikasi
+    // Reset Password setelah OTP verified
+    resetPassword: async (req, res) => {
+        try {
+            const { email, newPassword } = req.body;
+
+            if (!newPassword || newPassword.length < 6) {
+                return res.status(400).json({ message: 'Password minimal 6 karakter' });
+            }
+
+            // Update password di Firebase Auth
+            const userRecord = await auth.getUserByEmail(email);
+            await auth.updateUser(userRecord.uid, { password: newPassword });
+
+            res.json({ message: 'Password berhasil direset' });
+        } catch (error) {
+            res.status(500).json({ message: 'Gagal reset password', error: error.message });
         }
     },
 
