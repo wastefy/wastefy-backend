@@ -7,7 +7,6 @@ const AI_API_KEY = 'wastefy-unhas-2324';
 const authHeader = () => ({ 'X-API-Key': AI_API_KEY });
 
 // 1. VISION 
-// POST /predict/vision
 const predictVision = async (fileBuffer, mimetype) => {
     const formData = new FormData();
     formData.append('file_foto', fileBuffer, {
@@ -24,7 +23,7 @@ const predictVision = async (fileBuffer, mimetype) => {
         const { data } = response.data;
         return {
             out_of_scope: data.out_of_scope,
-            nama_item: data.name_item,
+            nama_item: data.nama_item,
             jenis_item: data.jenis_item,
             kondisi_fisik: data.kondisi_fisik,
             confidence: data.confidence,
