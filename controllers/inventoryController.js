@@ -4,7 +4,7 @@ const { sayurBuahList, hitungSisaHari, caraSimpanDefault } = require('../data/sa
 const { db } = require('../config/firebase');
 const multer = require('multer');
 
-//  Multer: validasi format & ukuran file 
+// Multer: validasi format & ukuran file
 const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 5 * 1024 * 1024 },
@@ -18,7 +18,7 @@ const upload = multer({
     },
 });
 
-//  Helper: cek & tambah kuota scan harian 
+// Helper: cek kuota scan harian
 const cekLimitScan = async (uid) => {
     const today = new Date().toISOString().split('T')[0];
     const doc = await db.collection('scan_quota').doc(uid).get();
@@ -27,6 +27,7 @@ const cekLimitScan = async (uid) => {
     return { allowed: remaining > 0, remaining };
 };
 
+// Helper: tambah count scan
 const tambahCountScan = async (uid) => {
     const today = new Date().toISOString().split('T')[0];
     const ref = db.collection('scan_quota').doc(uid);
@@ -42,7 +43,7 @@ const tambahCountScan = async (uid) => {
 
 const inventoryController = {
 
-    //  Search sayur/buah (untuk dropdown dengan search) 
+    // Search sayur/buah (untuk dropdown dengan search)
     searchItem: async (req, res) => {
         try {
             const { q } = req.query;
@@ -56,7 +57,7 @@ const inventoryController = {
         }
     },
 
-    //  Cek sisa kuota scan harian 
+    // Cek sisa kuota scan harian
     getScanQuota: async (req, res) => {
         try {
             const uid = req.user.uid;
@@ -72,12 +73,13 @@ const inventoryController = {
         }
     },
 
-    //  Scan gambar 
+    // Scan gambar
+    // Alur: cek limit -> validasi file -> vision AI -> tambah count -> cek out_of_scope -> busuk bypass -> regression + genai
     scanGambar: async (req, res) => {
         try {
             const uid = req.user.uid;
 
-            // 1. Cek limit
+            // 1. Cek limit scan 5x/hari
             const quota = await cekLimitScan(uid);
             if (!quota.allowed) {
                 return res.status(429).json({
@@ -94,7 +96,7 @@ const inventoryController = {
             // 3. Panggil AI Vision
             const result = await predictVision(req.file.buffer, req.file.mimetype);
 
-            // 4. Tambah count (dihitung meski out_of_scope)
+            // 4. Tambah count scan (dihitung meski out_of_scope)
             const newCount = await tambahCountScan(uid);
             const remaining_scan = 5 - newCount;
 
@@ -107,21 +109,20 @@ const inventoryController = {
                 });
             }
 
-            // Data Pendukung Lokal
+            // Data pendukung lokal
             const itemData = sayurBuahList.find(
                 i => i.nama.toLowerCase() === result.nama_item.toLowerCase()
             );
             const lokasi_default = 'Pendingin';
             const tanggal_default = new Date().toISOString().split('T')[0];
 
-            // 6. Logika khusus BUSUK — bypass semua AI model
+            // 6. Logika khusus busuk: bypass semua AI model
             if (result.kondisi_fisik === 'Busuk') {
                 const caraSimpan = caraSimpanDefault['Busuk'];
                 return res.json({
                     out_of_scope: false,
                     message: 'Gambar berhasil dianalisis',
                     remaining_scan,
-                    peringatan: '⚠️ Bahan dalam kondisi busuk — disarankan untuk segera dibuang.',
                     data: {
                         nama_item: result.nama_item,
                         jenis_item: itemData ? itemData.jenis : result.jenis_item,
@@ -132,15 +133,12 @@ const inventoryController = {
                         tanggal_catat: tanggal_default,
                         sisa_hari: 0,
                         status: 'Expired',
-                        tindakan: caraSimpan.tindakan,
                         cara_simpan: caraSimpan.cara_simpan,
-                        tips_tambahan: null,
-                        saran: caraSimpan.saran,
                     },
                 });
             }
 
-            // 7. Normal flow — panggil AI Regression & GenAI
+            // 7. Normal flow: panggil AI Regression dan GenAI
             const sisa_hari = await predictRegression({
                 nama_item: result.nama_item,
                 jenis_item: result.jenis_item,
@@ -164,7 +162,6 @@ const inventoryController = {
                 out_of_scope: false,
                 message: 'Gambar berhasil dianalisis',
                 remaining_scan,
-                peringatan: null,
                 data: {
                     nama_item: result.nama_item,
                     jenis_item: itemData ? itemData.jenis : result.jenis_item,
@@ -175,10 +172,8 @@ const inventoryController = {
                     tanggal_catat: tanggal_default,
                     sisa_hari,
                     status,
-                    tindakan: genaiResult?.tindakan || caraSimpan.tindakan,
                     cara_simpan: genaiResult?.cara_simpan || caraSimpan.cara_simpan,
-                    saran: genaiResult?.saran || caraSimpan.saran,
-                }
+                },
             });
 
         } catch (error) {
@@ -186,33 +181,34 @@ const inventoryController = {
         }
     },
 
-    // Tambah Item Baru
+    // Tambah item baru
+    // Regression dan GenAI dipanggil saat tombol "tambah stok" ditekan
     addItem: async (req, res) => {
         try {
             const uid = req.user.uid;
             const { nama_item, kondisi_fisik, lokasi_penyimpanan, tanggal_beli } = req.body;
 
-            // Validasi filter input sesuai AI service 
+            // Validasi filter input sesuai daftar valid AI service
             const filterErrors = validateInput({ nama_item, kondisi_fisik, lokasi_penyimpanan });
             if (filterErrors.length > 0) {
                 return res.status(400).json({ message: filterErrors[0] });
             }
 
-            //  Validasi urutan: nama_item harus ada sebelum kondisi_fisik 
+            // Validasi urutan: nama_item harus ada sebelum kondisi_fisik
             if (!nama_item && kondisi_fisik) {
                 return res.status(400).json({
                     message: 'nama_item harus diisi terlebih dahulu sebelum kondisi_fisik',
                 });
             }
 
-            //  Validasi field wajib 
+            // Validasi field wajib
             if (!nama_item || !kondisi_fisik || !lokasi_penyimpanan) {
                 return res.status(400).json({
                     message: 'nama_item, kondisi_fisik, dan lokasi_penyimpanan wajib diisi',
                 });
             }
 
-            //  Cek nama_item di kamus 
+            // Cek nama_item di kamus lokal
             const itemData = sayurBuahList.find(
                 i => i.nama.toLowerCase() === nama_item.toLowerCase()
             );
@@ -220,14 +216,14 @@ const inventoryController = {
                 return res.status(400).json({ message: 'nama_item tidak ditemukan di database' });
             }
 
-            //  Validasi kondisi_fisik sesuai jenis item 
+            // Validasi kondisi_fisik sesuai jenis item
             if (!itemData.kondisi.includes(kondisi_fisik)) {
                 return res.status(400).json({
                     message: `kondisi_fisik untuk ${itemData.jenis} harus: ${itemData.kondisi.join(', ')}`,
                 });
             }
 
-            //  Logika khusus BUSUK: bypass AI, sisa_hari = 0, status Expired 
+            // Logika khusus busuk: bypass AI, sisa_hari = 0, status Expired langsung
             if (kondisi_fisik === 'Busuk') {
                 const caraSimpan = caraSimpanDefault['Busuk'];
                 const item = {
@@ -240,20 +236,17 @@ const inventoryController = {
                     sisa_hari: 0,
                     status: 'Expired',
                     isArchived: false,
-                    tindakan: caraSimpan.tindakan,
                     cara_simpan: caraSimpan.cara_simpan,
-                    tips_tambahan: null,
-                    saran: caraSimpan.saran,
                 };
                 const itemId = await inventoryModel.addItem(uid, item);
                 return res.status(201).json({
                     message: 'Item berhasil ditambahkan',
                     itemId,
                     item,
-                    peringatan: '⚠️ Bahan dalam kondisi busuk — disarankan untuk segera dibuang.',
                 });
             }
 
+            // Normal flow: panggil Regression dan GenAI saat konfirmasi tambah stok
             const tanggal = tanggal_beli || new Date().toISOString().split('T')[0];
             const sisa_hari = await predictRegression({
                 nama_item,
@@ -284,10 +277,7 @@ const inventoryController = {
                 sisa_hari,
                 status,
                 isArchived: false,
-                tindakan: genaiResult?.tindakan || caraSimpan.tindakan,
                 cara_simpan: genaiResult?.cara_simpan || caraSimpan.cara_simpan,
-                tips_tambahan: genaiResult?.tips_tambahan || null,
-                saran: caraSimpan.saran,
             };
 
             const itemId = await inventoryModel.addItem(uid, item);
@@ -298,7 +288,7 @@ const inventoryController = {
         }
     },
 
-    //  Lihat semua item 
+    // Lihat semua item
     getAllItems: async (req, res) => {
         try {
             const uid = req.user.uid;
@@ -312,7 +302,7 @@ const inventoryController = {
         }
     },
 
-    //  Get item by ID 
+    // Get item by ID
     getItemById: async (req, res) => {
         try {
             const { id } = req.params;
@@ -326,7 +316,8 @@ const inventoryController = {
         }
     },
 
-    //  Edit item 
+    // Edit item (hanya untuk koreksi input)
+    // Validasi urutan sama: nama_item harus ada sebelum kondisi_fisik
     updateItem: async (req, res) => {
         try {
             const { id } = req.params;
@@ -354,7 +345,6 @@ const inventoryController = {
                 updateData.jenis_item = itemData.jenis;
             }
 
-            // Logika busuk saat edit
             if (kondisi_fisik || lokasi_penyimpanan) {
                 const finalNama = nama_item || item.nama_item;
                 const finalKondisi = kondisi_fisik || item.kondisi_fisik;
@@ -369,6 +359,7 @@ const inventoryController = {
                     return res.status(400).json({ message: 'lokasi_penyimpanan harus: Suhu Ruang, Pendingin, atau Pembeku' });
                 }
 
+                // Logika busuk saat edit
                 if (finalKondisi === 'Busuk') {
                     const caraSimpan = caraSimpanDefault['Busuk'];
                     Object.assign(updateData, {
@@ -376,13 +367,10 @@ const inventoryController = {
                         lokasi_penyimpanan: finalLokasi,
                         sisa_hari: 0,
                         status: 'Expired',
-                        tindakan: caraSimpan.tindakan,
                         cara_simpan: caraSimpan.cara_simpan,
-                        tips_tambahan: null,
-                        saran: caraSimpan.saran,
                     });
                 } else {
-                    // Panggil AI Regression untuk sisa_hari baru
+                    // Panggil AI Regression dan GenAI untuk data terbaru
                     const sisa_hari = await predictRegression({
                         nama_item: finalNama,
                         jenis_item: itemData ? itemData.jenis : item.jenis_item,
@@ -405,10 +393,7 @@ const inventoryController = {
                         lokasi_penyimpanan: finalLokasi,
                         sisa_hari,
                         status: determineStatus(sisa_hari),
-                        tindakan: genaiResult?.tindakan || caraSimpan.tindakan,
                         cara_simpan: genaiResult?.cara_simpan || caraSimpan.cara_simpan,
-                        tips_tambahan: genaiResult?.tips_tambahan || null,
-                        saran: caraSimpan.saran,
                     });
                 }
             }
@@ -422,7 +407,7 @@ const inventoryController = {
         }
     },
 
-    //  Tandai terpakai 
+    // Tandai terpakai
     markAsUsed: async (req, res) => {
         try {
             const { id } = req.params;
@@ -438,7 +423,7 @@ const inventoryController = {
         }
     },
 
-    //  Tandai buang 
+    // Tandai buang
     markAsWasted: async (req, res) => {
         try {
             const { id } = req.params;
@@ -454,7 +439,7 @@ const inventoryController = {
         }
     },
 
-    //  Kembalikan ke stok 
+    // Kembalikan ke stok (hanya item wasted yang bisa)
     restoreItem: async (req, res) => {
         try {
             const { id } = req.params;
@@ -467,7 +452,7 @@ const inventoryController = {
             }
             if (!item.isArchived) return res.status(400).json({ message: 'Item masih di stok' });
 
-            // Busuk tetap sisa_hari 0, non-busuk hitung ulang secara lokal
+            // Busuk tetap 0, non-busuk hitung ulang lokal
             const sisa_hari = hitungSisaHari(item.nama_item, item.kondisi_fisik, item.lokasi_penyimpanan);
             const status = determineStatus(sisa_hari);
             const caraSimpan = caraSimpanDefault[item.kondisi_fisik] || caraSimpanDefault['Segar'];
@@ -480,10 +465,7 @@ const inventoryController = {
                 sisa_hari,
                 status,
                 tanggal_catat: new Date().toISOString().split('T')[0],
-                tindakan: caraSimpan.tindakan,
                 cara_simpan: caraSimpan.cara_simpan,
-                tips_tambahan: null,
-                saran: caraSimpan.saran,
             });
 
             res.json({ message: 'Item berhasil dikembalikan ke stok' });
@@ -492,7 +474,7 @@ const inventoryController = {
         }
     },
 
-    // Riwayat
+    // Lihat riwayat
     getHistory: async (req, res) => {
         try {
             const uid = req.user.uid;
@@ -506,7 +488,7 @@ const inventoryController = {
         }
     },
 
-    // Summary
+    // Summary dashboard
     getSummary: async (req, res) => {
         try {
             const uid = req.user.uid;
@@ -517,7 +499,7 @@ const inventoryController = {
         }
     },
 
-    //  Item expiring soon 
+    // Ambil item expiring soon
     getExpiringItems: async (req, res) => {
         try {
             const uid = req.user.uid;
@@ -528,7 +510,8 @@ const inventoryController = {
         }
     },
 
-    //  Refresh status semua item 
+    // Refresh status semua item berdasarkan selisih tanggal_catat
+    // Item busuk di-skip karena status Expired permanen
     refreshStatus: async (req, res) => {
         try {
             const uid = req.user.uid;
@@ -554,7 +537,7 @@ const inventoryController = {
         }
     },
 
-    //  Hapus item permanen 
+    // Hapus item permanen
     deleteItem: async (req, res) => {
         try {
             const { id } = req.params;

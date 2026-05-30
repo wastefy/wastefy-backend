@@ -37,30 +37,20 @@ const itemMultiplier = {
 
 const caraSimpanDefault = {
     'Busuk': {
-        saran: 'Bahan sudah tidak layak konsumsi.',
-        tindakan: 'Segera buang untuk menghindari kontaminasi ke bahan lain.',
-        cara_simpan: 'Tidak perlu disimpan — langsung buang dan bersihkan wadah penyimpanan.',
+        cara_simpan: '- Tindakan Prioritas: Segera buang untuk menghindari kontaminasi ke bahan lain.\n- Cara Simpan: Tidak perlu disimpan – langsung buang dan bersihkan wadah penyimpanan.\n- Tips Tambahan: Bahan sudah tidak layak konsumsi.'
     },
     'Terlalu Matang': {
-        saran: 'Bahan hampir tidak layak konsumsi.',
-        tindakan: 'Segera gunakan atau olah sebelum benar-benar busuk.',
-        cara_simpan: 'Simpan terpisah dari bahan lain di kulkas dan segera olah.',
+        cara_simpan: '- Tindakan Prioritas: Segera gunakan atau olah sebelum benar-benar busuk.\n- Cara Simpan: Simpan terpisah dari bahan lain di kulkas dan segera olah.\n- Tips Tambahan: Bahan hampir tidak layak konsumsi.'
     },
     'Segar': {
-        saran: 'Bahan dalam kondisi baik.',
-        tindakan: 'Simpan sesuai lokasi penyimpanan yang dipilih.',
-        cara_simpan: 'Simpan di tempat sejuk dan kering, jauhkan dari sinar matahari langsung.',
+        cara_simpan: '- Tindakan Prioritas: Simpan sesuai lokasi penyimpanan yang dipilih.\n- Cara Simpan: Simpan di tempat sejuk dan kering, jauhkan dari sinar matahari langsung.\n- Tips Tambahan: Bahan dalam kondisi baik.'
     },
     'Matang': {
-        saran: 'Bahan siap dikonsumsi.',
-        tindakan: 'Segera konsumsi atau simpan di kulkas.',
-        cara_simpan: 'Simpan di kulkas untuk memperpanjang kesegaran.',
+        cara_simpan: '- Tindakan Prioritas: Segera konsumsi atau simpan di kulkas.\n- Cara Simpan: Simpan di kulkas untuk memperpanjang kesegaran.\n- Tips Tambahan: Bahan siap dikonsumsi.'
     },
     'Mentah': {
-        saran: 'Bahan masih mentah, belum siap konsumsi langsung.',
-        tindakan: 'Simpan di tempat sejuk hingga matang.',
-        cara_simpan: 'Simpan di suhu ruang hingga matang, lalu pindahkan ke kulkas.',
-    },
+        cara_simpan: '- Tindakan Prioritas: Simpan di tempat sejuk hingga matang.\n- Cara Simpan: Simpan di suhu ruang hingga matang, lalu pindahkan ke kulkas.\n- Tips Tambahan: Bahan masih mentah, belum siap konsumsi langsung.'
+    }
 };
 
 const hitungSisaHari = (namaItem, kondisiFisik, lokasiPenyimpanan) => {

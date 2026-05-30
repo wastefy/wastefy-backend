@@ -12,8 +12,7 @@ const VALID_JENIS = ['Buah', 'Sayur'];
 const VALID_KONDISI = ['Busuk', 'Matang', 'Mentah', 'Terlalu Matang', 'Segar'];
 const VALID_LOKASI = ['Suhu Ruang', 'Pendingin', 'Pembeku'];
 
-
-// 1. VISION 
+// 1. VISION
 const predictVision = async (fileBuffer, mimetype) => {
     const formData = new FormData();
     const safeMimetype = mimetype || 'image/jpeg';
@@ -42,7 +41,8 @@ const predictVision = async (fileBuffer, mimetype) => {
     }
 };
 
-// 2. REGRESSION 
+// 2. REGRESSION
+// sisa_hari di-cap 0-40 sesuai ketentuan AI service
 const predictRegression = async ({ nama_item, jenis_item, kondisi_fisik, lokasi_penyimpanan, tanggal_beli }) => {
     try {
         const response = await axios.post(
@@ -51,53 +51,21 @@ const predictRegression = async ({ nama_item, jenis_item, kondisi_fisik, lokasi_
             { headers: { 'Content-Type': 'application/json', ...authHeader() } }
         );
         const raw = response.data.data.sisa_hari;
-        // Cap 0-40
         return Math.min(40, Math.max(0, raw));
     } catch (error) {
         _handleAIError(error, 'Regression');
     }
 };
 
-//  3. GENAI 
+// 3. GENAI
 const parseGenaiResponse = (data) => {
     if (!data) return null;
-
-    // Tentukan string mentah (raw) untuk di-parse jika isi data berupa string gabungan
-    let raw = '';
-    if (typeof data === 'object') {
-        raw = data.cara_simpan || data.tindakan || data.saran || data.tips_tambahan || JSON.stringify(data);
-    } else {
-        raw = typeof data === 'string' ? data : JSON.stringify(data);
+    if (typeof data === 'object' && data.cara_simpan) {
+        return { cara_simpan: data.cara_simpan };
     }
-
-    // Fungsi Regex pencari baris teks berdasarkan label tanda minus (-) dari AI Python
-    const extract = (label, nextLabels) => {
-        const pattern = new RegExp(`-\\s*${label}:\\s*([\\s\\S]*?)(?=${nextLabels.map(l => `-\\s*${l}:`).join('|')}|$)`, 'i');
-        const match = raw.match(pattern);
-        return match ? match[1].trim() : '';
-    };
-
-    // Eksekusi pemotongan string string berdasarkan pola spasi / baris baru (\n)
-    const tindakanPecah = extract('Tindakan Prioritas', ['Cara Simpan', 'Tips Tambahan', 'Saran']);
-    const caraSimpanPecah = extract('Cara Simpan', ['Tips Tambahan', 'Tindakan Prioritas', 'Saran']);
-    const saranPecah = extract('Tips Tambahan', ['Cara Simpan', 'Tindakan Prioritas']) || extract('Saran', ['Cara Simpan', 'Tindakan Prioritas']);
-
-    if (tindakanPecah || caraSimpanPecah || saranPecah) {
-        return {
-            tindakan: tindakanPecah,
-            cara_simpan: caraSimpanPecah,
-            saran: saranPecah
-        };
+    if (typeof data === 'string') {
+        return { cara_simpan: data };
     }
-
-    if (typeof data === 'object' && data.cara_simpan && !data.cara_simpan.includes('- ')) {
-        return {
-            tindakan: data.tindakan || '',
-            cara_simpan: data.cara_simpan || '',
-            saran: data.saran || data.tips_tambahan || '',
-        };
-    }
-
     return null;
 };
 
@@ -109,7 +77,6 @@ const predictGenai = async ({ nama_item, jenis_item, kondisi_fisik, lokasi_penyi
             { nama_item, jenis_item, kondisi_fisik, lokasi_penyimpanan, sisa_hari },
             { headers: { 'Content-Type': 'application/json', ...authHeader() } }
         );
-
         return parseGenaiResponse(response.data.data);
     } catch (error) {
         // Fallback otomatis memicu caraSimpanDefault lokal jika server GenAI RTO/Down
@@ -118,7 +85,7 @@ const predictGenai = async ({ nama_item, jenis_item, kondisi_fisik, lokasi_penyi
     }
 };
 
-//  Status berdasarkan sisa hari 
+// Status berdasarkan sisa hari
 // Fresh   = sisa_hari > 3
 // Soon    = sisa_hari > 0 && <= 3
 // Expired = sisa_hari <= 0
@@ -128,7 +95,7 @@ const determineStatus = (sisaHari) => {
     return 'Expired';
 };
 
-//  Validasi filter input 
+// Validasi filter input
 const validateInput = ({ nama_item, jenis_item, kondisi_fisik, lokasi_penyimpanan }) => {
     const errors = [];
     if (nama_item && !VALID_ITEM.includes(nama_item)) errors.push(`nama_item tidak valid. Pilihan: ${VALID_ITEM.join(', ')}`);
@@ -138,11 +105,10 @@ const validateInput = ({ nama_item, jenis_item, kondisi_fisik, lokasi_penyimpana
     return errors;
 };
 
-//  Error handler terpusat 
+// Error handler terpusat
 const _handleAIError = (error, label) => {
     const status = error.response?.status;
     const body = error.response?.data;
-
     if (status === 401) throw new Error(`[AI ${label}] API Key tidak valid atau tidak ada`);
     if (status === 422) {
         const pesan = body?.errors?.[0]?.message || JSON.stringify(body);
