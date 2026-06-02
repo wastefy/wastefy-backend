@@ -51,6 +51,21 @@ const notificationModel = {
         if (!doc.exists) return null;
         return doc.data().fcmToken || null;
     },
+
+    // Cek apakah notifikasi untuk item ini sudah ada hari ini
+    existsToday: async (uid, itemId, status) => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const snapshot = await db.collection('notifications')
+            .where('uid', '==', uid)
+            .where('itemId', '==', itemId)
+            .where('status', '==', status)
+            .where('createdAt', '>=', today.toISOString())
+            .get();
+
+        return !snapshot.empty;
+    },
 };
 
 module.exports = notificationModel;

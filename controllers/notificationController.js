@@ -90,12 +90,15 @@ const notificationController = {
                 };
 
                 // Simpan ke riwayat dulu (terlepas FCM berhasil atau tidak)
-                await notificationModel.saveNotification(uid, {
-                    title: ' Segera Habiskan!',
-                    body: `${namaItem} akan segera kadaluarsa dalam ${item.sisa_hari} hari`,
-                    itemId: item.id,
-                    status: 'Soon',
-                });
+                const alreadySoon = await notificationModel.existsToday(uid, item.id, 'Soon');
+                if (!alreadySoon) {
+                    await notificationModel.saveNotification(uid, {
+                        title: ' Segera Habiskan!',
+                        body: `${namaItem} akan segera kadaluarsa dalam ${item.sisa_hari} hari`,
+                        itemId: item.id,
+                        status: 'Soon',
+                    });
+                }
 
                 try {
                     await admin.messaging().send(message);
@@ -122,12 +125,15 @@ const notificationController = {
                 };
 
                 // Simpan ke riwayat dulu (terlepas FCM berhasil atau tidak)
-                await notificationModel.saveNotification(uid, {
-                    title: ' Sudah Kadaluarsa!',
-                    body: `${namaItem} sudah kadaluarsa, segera buang atau periksa`,
-                    itemId: item.id,
-                    status: 'Expired',
-                });
+                const alreadyExpired = await notificationModel.existsToday(uid, item.id, 'Expired');
+                if (!alreadyExpired) {
+                    await notificationModel.saveNotification(uid, {
+                        title: ' Sudah Kadaluarsa!',
+                        body: `${namaItem} sudah kadaluarsa, segera buang atau periksa`,
+                        itemId: item.id,
+                        status: 'Expired',
+                    });
+                }
 
                 try {
                     await admin.messaging().send(message);
