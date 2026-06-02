@@ -67,6 +67,8 @@ const notificationController = {
 
             // Ambil semua item aktif
             const items = await inventoryModel.getAllItems(uid);
+            console.log('Total items:', items.length);        
+            console.log('Sample status:', items.map(i => i.status));
 
             const soonItems = items.filter(i => i.status === 'Soon');
             const expiredItems = items.filter(i => i.status === 'Expired');
