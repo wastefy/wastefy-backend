@@ -61,10 +61,12 @@ const notificationModel = {
             .where('uid', '==', uid)
             .where('itemId', '==', itemId)
             .where('status', '==', status)
-            .where('createdAt', '>=', today.toISOString())
             .get();
 
-        return !snapshot.empty;
+        // Filter hari ini di sisi kode, bukan di query
+        const todayStr = today.toISOString();
+        const exists = snapshot.docs.some(doc => doc.data().createdAt >= todayStr);
+        return exists;
     },
 };
 
