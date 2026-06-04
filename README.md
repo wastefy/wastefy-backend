@@ -1,6 +1,6 @@
 # wastefy-backend
 
-REST API untuk aplikasi **Wastefy** — platform manajemen stok makanan berbasis AI yang membantu pengguna memantau kondisi dan masa simpan bahan makanan.
+REST API untuk aplikasi **Wastefy** yaitu platform manajemen stok makanan berbasis AI yang membantu pengguna memantau kondisi dan masa simpan bahan makanan.
 
 ---
 
